@@ -109,7 +109,8 @@ Function GetMediaCreatedDate {
 
 Function ParseDate {
 	param (
-		[Parameter(Mandatory = $true)] [string] $dateString
+		[Parameter(Mandatory = $true)] [string] $dateString,
+		[Parameter(Mandatory = $true)] [string] $format
 	)
 
 	# Remove encoding characters
@@ -120,10 +121,11 @@ Function ParseDate {
 
 	# Handle dates being returned in different formats
 	try {
-		return [DateTime]::ParseExact($replacedDateString, "MM/dd/yyyy", $null)
+		return [DateTime]::ParseExact($replacedDateString, $format, $null)
 	}
 	catch {
-		return [DateTime]::ParseExact($replacedDateString, "dd/MM/yyyy", $null)
+		Write-Error "Failed to parse date $dateString with format $format"
+		exit
 	}
 }
 
@@ -135,13 +137,14 @@ Function OrganiseImage {
 		[Parameter(Mandatory = $true)] [string] $date,
 		[Parameter(Mandatory = $true)] [string] $meta,
 		[Parameter(Mandatory = $true)] [string] $source,
-		[Parameter(Mandatory = $true)] [string] $destination
+		[Parameter(Mandatory = $true)] [string] $destination,
+		[Parameter(Mandatory = $true)] [string] $format
 	)
 
 	Write-Host "`nOrganising $name" -ForegroundColor Green
 	Write-Host "$meta`: $date"
 
-	$fileDate = ParseDate -dateString $date
+	$fileDate = ParseDate -dateString $date -format $format
 	$fileYear = $fileDate.Year
 	$fileMonth = $fileDate.Month
 
@@ -176,7 +179,7 @@ ForEach ($file in $files) {
 	# Sort any images or files with a Date taken property
 	$imageDateTaken = GetImageDateTaken -filePath $file.Directory.FullName -fileName $file.Name
 	if ($imageDateTaken) {
-		OrganiseImage -name $file.Name -date $imageDateTaken -meta "Date taken" -source $sourcePath -destination $destinationPath
+		OrganiseImage -name $file.Name -date $imageDateTaken -meta "Date taken" -source $sourcePath -destination $destinationPath -format "dd/MM/yyyy"
 
 		continue;
 	}
@@ -184,11 +187,11 @@ ForEach ($file in $files) {
 	# Sort any videos or files with a Media created property
 	$mediaCreatedDate = GetMediaCreatedDate -filePath $file.Directory.FullName -fileName $file.Name
 	if ($mediaCreatedDate) {
-		OrganiseImage -name $file.Name -date $mediaCreatedDate -meta "Media created" -source $sourcePath -destination $destinationPath
+		OrganiseImage -name $file.Name -date $mediaCreatedDate -meta "Media created" -source $sourcePath -destination $destinationPath -format "dd/MM/yyyy"
 
 		continue;
 	}
 
 	# Fall back to sorting by last write time
-	OrganiseImage -name $file.Name -date $file.LastWriteTime -meta "Last write" -source $sourcePath -destination $destinationPath
+	OrganiseImage -name $file.Name -date $file.LastWriteTime -meta "Last write" -source $sourcePath -destination $destinationPath -format "MM/dd/yyyy"
 }

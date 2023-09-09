@@ -6,7 +6,7 @@ param (
 
 
 if ((Test-Path $destinationPath) -eq $false) {
-	Write-Host "`nCreating destination path $destinationPath`n" -ForegroundColor Green
+	Write-Host "Creating destination path $destinationPath" -ForegroundColor Green
 	$out = New-Item -ItemType Directory -Force -Path $destinationPath
 }
 
@@ -31,10 +31,15 @@ Function CreateYearFolder {
 		[Parameter(Mandatory = $true)] [int] $year
 	)
 
+	if ($year -lt 1900) {
+		Write-Host "Year $year is invalid" -ForegroundColor Red
+		return
+	}
+
 	$yearPath = "$path\$year"
 
 	if ((Test-Path $yearPath) -eq $false) {
-		Write-Host "`nCreating folder $yearPath`n" -ForegroundColor Green
+		Write-Host "Creating folder $yearPath" -ForegroundColor Green
 		$out = New-Item -ItemType Directory -Force -Path $yearPath
 	}
 }
@@ -45,10 +50,15 @@ Function CreateMonthSubFolder {
 		[Parameter(Mandatory = $true)] [int] $month
 	)
 
+	if ($month -lt 1 -or $month -gt 12) {
+		Write-Host "Month $month is invalid" -ForegroundColor Red
+		return
+	}
+
 	$monthPath = "$path\$($months[$month])"
 
 	if ((Test-Path $monthPath) -eq $false) {
-		Write-Host "`nCreating folder $monthPath`n" -ForegroundColor Green
+		Write-Host "Creating folder $monthPath" -ForegroundColor Green
 		$out = New-Item -ItemType Directory -Force -Path $monthPath
 	}
 }
@@ -102,10 +112,19 @@ Function ParseDate {
 		[Parameter(Mandatory = $true)] [string] $dateString
 	)
 
-	# Need to remove encoding characters from date string returned
-	$dateString = $dateString -replace "\u200e|\u200f", ""
+	# Remove encoding characters
+	$replacedDateString = $dateString -replace "\u200e|\u200f", ""
 
-	return [DateTime]::Parse($dateString)
+	# We only want the date
+	$replacedDateString = $replacedDateString -split " " | Select-Object -First 1
+
+	# Handle dates being returned in different formats
+	try {
+		return [DateTime]::ParseExact($replacedDateString, "MM/dd/yyyy", $null)
+	}
+	catch {
+		return [DateTime]::ParseExact($replacedDateString, "dd/MM/yyyy", $null)
+	}
 }
 
 
@@ -118,6 +137,9 @@ Function OrganiseImage {
 		[Parameter(Mandatory = $true)] [string] $source,
 		[Parameter(Mandatory = $true)] [string] $destination
 	)
+
+	Write-Host "`nOrganising $name" -ForegroundColor Green
+	Write-Host "$meta`: $date"
 
 	$fileDate = ParseDate -dateString $date
 	$fileYear = $fileDate.Year
@@ -132,7 +154,7 @@ Function OrganiseImage {
 	$fileDestination = "$destination\$fileYear\$($months[$fileMonth])"
 
 
-	Write-Host "`n$meta`: $fileDate `tSource: $filePath -> Destination: $fileDestination"
+	Write-Host "Source: $filePath -> Destination: $fileDestination"
 	if (Get-ChildItem -Path $fileDestination $name) {
 		Write-Host "File already exists in destination" -ForegroundColor Yellow
 	}

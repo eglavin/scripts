@@ -25,7 +25,7 @@ $months = @{
 	12 = "12 - December"
 }
 
-Function CreateYearFolder {
+function CreateYearFolder {
 	param (
 		[Parameter(Mandatory = $true)] [string] $path,
 		[Parameter(Mandatory = $true)] [int] $year
@@ -44,7 +44,7 @@ Function CreateYearFolder {
 	}
 }
 
-Function CreateMonthSubFolder {
+function CreateMonthSubFolder {
 	param (
 		[Parameter(Mandatory = $true)] [string] $path,
 		[Parameter(Mandatory = $true)] [int] $month
@@ -63,7 +63,7 @@ Function CreateMonthSubFolder {
 	}
 }
 
-Function GetImageDateTaken {
+function GetImageDateTaken {
 	param (
 		[Parameter(Mandatory = $true)] [string] $fileName,
 		[Parameter(Mandatory = $true)] [string] $filePath
@@ -85,7 +85,7 @@ Function GetImageDateTaken {
 	catch {}
 }
 
-Function GetMediaCreatedDate {
+function GetMediaCreatedDate {
 	param (
 		[Parameter(Mandatory = $true)] [string] $fileName,
 		[Parameter(Mandatory = $true)] [string] $filePath
@@ -107,7 +107,7 @@ Function GetMediaCreatedDate {
 	catch {}
 }
 
-Function ParseDate {
+function ParseDate {
 	param (
 		[Parameter(Mandatory = $true)] [string] $dateString,
 		[Parameter(Mandatory = $true)] [string] $format
@@ -125,13 +125,14 @@ Function ParseDate {
 	}
 	catch {
 		Write-Error "Failed to parse date $dateString with format $format"
-		exit
+
+		exit 1
 	}
 }
 
 
 
-Function OrganiseImage {
+function OrganiseImage {
 	param (
 		[Parameter(Mandatory = $true)] [string] $name,
 		[Parameter(Mandatory = $true)] [string] $date,
@@ -175,23 +176,47 @@ Function OrganiseImage {
 
 $files = Get-ChildItem -Path $sourcePath -File
 
-ForEach ($file in $files) {
+foreach ($file in $files) {
 	# Sort any images or files with a Date taken property
-	$imageDateTaken = GetImageDateTaken -filePath $file.Directory.FullName -fileName $file.Name
+	$imageDateTaken = GetImageDateTaken `
+		-filePath $file.Directory.FullName `
+		-fileName $file.Name
+
 	if ($imageDateTaken) {
-		OrganiseImage -name $file.Name -date $imageDateTaken -meta "Date taken" -source $sourcePath -destination $destinationPath -format "dd/MM/yyyy"
+		OrganiseImage `
+			-name $file.Name `
+			-date $imageDateTaken `
+			-meta "Date taken" `
+			-source $sourcePath `
+			-destination $destinationPath `
+			-format "dd/MM/yyyy"
 
 		continue;
 	}
 
 	# Sort any videos or files with a Media created property
-	$mediaCreatedDate = GetMediaCreatedDate -filePath $file.Directory.FullName -fileName $file.Name
+	$mediaCreatedDate = GetMediaCreatedDate `
+		-filePath $file.Directory.FullName `
+		-fileName $file.Name
+
 	if ($mediaCreatedDate) {
-		OrganiseImage -name $file.Name -date $mediaCreatedDate -meta "Media created" -source $sourcePath -destination $destinationPath -format "dd/MM/yyyy"
+		OrganiseImage `
+			-name $file.Name `
+			-date $mediaCreatedDate `
+			-meta "Media created" `
+			-source $sourcePath `
+			-destination $destinationPath `
+			-format "dd/MM/yyyy"
 
 		continue;
 	}
 
 	# Fall back to sorting by last write time
-	OrganiseImage -name $file.Name -date $file.LastWriteTime -meta "Last write" -source $sourcePath -destination $destinationPath -format "MM/dd/yyyy"
+	OrganiseImage `
+		-name $file.Name `
+		-date $file.LastWriteTime `
+		-meta "Last write" `
+		-source $sourcePath `
+		-destination $destinationPath `
+		-format "MM/dd/yyyy"
 }

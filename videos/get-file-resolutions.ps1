@@ -17,6 +17,9 @@ $knownVideosFileExtensions = @(
 );
 
 
+# Test if ffprobe is installed from ffmpeg
+$hasFFprobe = $null -ne (Get-Command -Name ffprobe -ErrorAction SilentlyContinue)
+
 # Use shell object application to get video properties
 $shellObject = New-Object -ComObject Shell.Application
 function GetVideoProperty {
@@ -47,15 +50,26 @@ $output = [System.Collections.ArrayList]@()
 
 
 foreach	( $file in $files ) {
-	$width = GetVideoProperty `
-		-filePath $file.Directory.FullName `
-		-fileName $file.Name `
-		-property 'Frame width'
+	if ($hasFFprobe) {
+		$ffprobeOutput = (ffprobe `
+				-v error `
+				-select_streams v `
+				-show_entries stream=width, height `
+				-of json $file) | ConvertFrom-Json
 
-	$height = GetVideoProperty `
-		-filePath $file.Directory.FullName `
-		-fileName $file.Name `
-		-property 'Frame height'
+		$width = $ffprobeOutput.streams[0].width
+		$height = $ffprobeOutput.streams[0].height
+	}
+	else {
+		$width = GetVideoProperty `
+			-filePath $file.Directory.FullName `
+			-fileName $file.Name `
+			-property 'Frame width'
+		$height = GetVideoProperty `
+			-filePath $file.Directory.FullName `
+			-fileName $file.Name `
+			-property 'Frame height'
+	}
 
 	# Add to output if resolution is less than 1920 width or 1080 height
 	# if ([int]$width -lt 1919 -or [int]$height -lt 1079) {

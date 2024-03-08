@@ -54,8 +54,8 @@ foreach	( $file in $files ) {
 		$ffprobeOutput = (ffprobe `
 				-v error `
 				-select_streams v `
-				-show_entries stream=width, height `
-				-of json $file) | ConvertFrom-Json
+				-show_entries stream=width,height `
+				-of json "$($file.FullName)") | ConvertFrom-Json
 
 		$width = $ffprobeOutput.streams[0].width
 		$height = $ffprobeOutput.streams[0].height

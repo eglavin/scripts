@@ -19,9 +19,11 @@ $InputPath = "$Path\Input"
 $IntermediaryPath = "$Path\Intermediary"
 $OutputPath = "$Path\Output"
 
+if (-not (Test-Path -Path $IntermediaryPath)) New-Item -Path $IntermediaryPath -ItemType Directory | Out-Null
+if (-not (Test-Path -Path $OutputPath)) New-Item -Path $OutputPath -ItemType Directory | Out-Null
+
 $InputItems = Get-ChildItem -Path $InputPath -Filter "*.mp4" -File
 Write-Host "Input Items: $($InputItems.Count)"
-
 
 foreach ($InputItem in $InputItems) {
 	$InputItemName = $InputItem.Name
@@ -36,8 +38,15 @@ foreach ($InputItem in $InputItems) {
 
 	ffmpeg `
 		-y `
+		-i $InputItem.FullName `
+		-vn `
+		-acodec copy "$IntermediaryPath\$($InputItem.BaseName).aac"
+
+	ffmpeg `
+		-y `
 		-r 24 `
 		-i "$IntermediaryPath\$InputItemName" `
+		-i "$IntermediaryPath\$($InputItem.BaseName).aac" `
 		-c copy "$OutputPath\$InputItemName"
 
 	Write-Host "`n`n"

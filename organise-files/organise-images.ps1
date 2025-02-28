@@ -1,16 +1,13 @@
 param (
-	[Parameter(Mandatory = $true)] [string] $sourcePath,
-	[Parameter(Mandatory = $true)] [string] $destinationPath,
-	[switch] $move
+	[Parameter(Mandatory = $true)] [string] $SourcePath,
+	[Parameter(Mandatory = $true)] [string] $DestinationPath,
+	[switch] $Move,
+	[switch] $CreateTypeFolders,
+	[switch] $AllowFallbackToLastWriteTime
 )
 
 
-if ((Test-Path $destinationPath) -eq $false) {
-	Write-Host "Creating destination path $destinationPath" -ForegroundColor Green
-	$out = New-Item -ItemType Directory -Force -Path $destinationPath
-}
-
-$months = @{
+$Months = @{
 	1  = "01 - January";
 	2  = "02 - February";
 	3  = "03 - March";
@@ -25,108 +22,117 @@ $months = @{
 	12 = "12 - December"
 }
 
-function CreateYearFolder {
+
+
+function IsValidYear {
 	param (
-		[Parameter(Mandatory = $true)] [string] $path,
-		[Parameter(Mandatory = $true)] [int] $year
+		[Parameter(Mandatory = $true)] [int] $Year
 	)
 
-	if ($year -lt 1900) {
-		Write-Host "Year $year is invalid" -ForegroundColor Red
-		return
+	if ($Year -lt 1900) {
+		Write-Host "Year $Year is invalid" -ForegroundColor Red
+		return $false;
 	}
-
-	$yearPath = "$path\$year"
-
-	if ((Test-Path $yearPath) -eq $false) {
-		Write-Host "Creating folder $yearPath" -ForegroundColor Green
-		$out = New-Item -ItemType Directory -Force -Path $yearPath
-	}
+	return $true;
 }
 
-function CreateMonthSubFolder {
+function IsValidMonth {
 	param (
-		[Parameter(Mandatory = $true)] [string] $path,
-		[Parameter(Mandatory = $true)] [int] $month
+		[Parameter(Mandatory = $true)] [int] $Month
 	)
 
-	if ($month -lt 1 -or $month -gt 12) {
-		Write-Host "Month $month is invalid" -ForegroundColor Red
-		return
+	if ($Month -lt 1 -or $Month -gt 12) {
+		Write-Host "Month $Month is invalid" -ForegroundColor Red
+		return $false;
 	}
-
-	$monthPath = "$path\$($months[$month])"
-
-	if ((Test-Path $monthPath) -eq $false) {
-		Write-Host "Creating folder $monthPath" -ForegroundColor Green
-		$out = New-Item -ItemType Directory -Force -Path $monthPath
-	}
+	return $true;
 }
+
+$ShellObject = New-Object -ComObject Shell.Application
 
 function GetImageDateTaken {
 	param (
-		[Parameter(Mandatory = $true)] [string] $fileName,
-		[Parameter(Mandatory = $true)] [string] $filePath
+		[Parameter(Mandatory = $true)] [string] $FileName,
+		[Parameter(Mandatory = $true)] [string] $FilePath
 	)
 
 	try {
-		$shellObject = New-Object -ComObject Shell.Application
+		$DirectoryObject = $ShellObject.NameSpace($FilePath)
+		$FileObject = $DirectoryObject.ParseName($FileName)
 
-		$directoryObject = $shellObject.NameSpace($filePath)
-		$fileObject = $directoryObject.ParseName($fileName)
+		$Property = 'Date taken'
+		for ($Index = 5;
+			$DirectoryObject.GetDetailsOf($DirectoryObject.Items, $Index) -ne $Property;
+			++$Index) {}
 
-		$property = 'Date taken'
-		for ($index = 5;
-			$directoryObject.GetDetailsOf($directoryObject.Items, $index) -ne $property;
-			++$index) {}
-
-		return $directoryObject.GetDetailsOf($fileObject, $index)
+		return $DirectoryObject.GetDetailsOf($FileObject, $Index)
 	}
 	catch {}
 }
 
 function GetMediaCreatedDate {
 	param (
-		[Parameter(Mandatory = $true)] [string] $fileName,
-		[Parameter(Mandatory = $true)] [string] $filePath
+		[Parameter(Mandatory = $true)] [string] $FileName,
+		[Parameter(Mandatory = $true)] [string] $FilePath
 	)
 
 	try {
-		$shellObject = New-Object -ComObject Shell.Application
+		$DirectoryObject = $ShellObject.NameSpace($FilePath)
+		$FileObject = $DirectoryObject.ParseName($FileName)
 
-		$directoryObject = $shellObject.NameSpace($filePath)
-		$fileObject = $directoryObject.ParseName($fileName)
+		$Property = 'Media created'
+		for ($Index = 5;
+			$DirectoryObject.GetDetailsOf($DirectoryObject.Items, $Index) -ne $Property;
+			++$Index) {}
 
-		$property = 'Media created'
-		for ($index = 5;
-			$directoryObject.GetDetailsOf($directoryObject.Items, $index) -ne $property;
-			++$index) {}
-
-		return $directoryObject.GetDetailsOf($fileObject, $index)
+		return $DirectoryObject.GetDetailsOf($FileObject, $Index)
 	}
 	catch {}
 }
 
 function ParseDate {
 	param (
-		[Parameter(Mandatory = $true)] [string] $dateString,
-		[Parameter(Mandatory = $true)] [string] $format
+		[Parameter(Mandatory = $true)] [string] $DateString,
+		[Parameter(Mandatory = $true)] [string] $Format
 	)
 
 	# Remove encoding characters
-	$replacedDateString = $dateString -replace "\u200e|\u200f", ""
+	$ReplacedDateString = $DateString -replace "\u200e|\u200f", ""
 
 	# We only want the date
-	$replacedDateString = $replacedDateString -split " " | Select-Object -First 1
+	$ReplacedDateString = $ReplacedDateString -split " " | Select-Object -First 1
 
 	# Handle dates being returned in different formats
 	try {
-		return [DateTime]::ParseExact($replacedDateString, $format, $null)
+		return [DateTime]::ParseExact($ReplacedDateString, $Format, $null)
 	}
 	catch {
-		Write-Error "Failed to parse date $dateString with format $format"
+		Write-Error "Failed to parse date $DateString with format $Format"
 
 		exit 1
+	}
+}
+
+function RecogniseType {
+	param (
+		[Parameter(Mandatory = $true)] [string] $FileName
+	)
+
+	$Extension = ($FileName -split "\.").ToLower() | Select-Object -Last 1
+
+	switch -Regex ($Extension) {
+		"^jpg|jpeg|png|gif|bmp$" {
+			return "image"
+		}
+		"^rw2|cr2$" {
+			return "raw"
+		}
+		"^mp4|mov|avi|wmv|flv$" {
+			return "video"
+		}
+		default {
+			return "unknown"
+		}
 	}
 }
 
@@ -134,89 +140,118 @@ function ParseDate {
 
 function OrganiseImage {
 	param (
-		[Parameter(Mandatory = $true)] [string] $name,
-		[Parameter(Mandatory = $true)] [string] $date,
-		[Parameter(Mandatory = $true)] [string] $meta,
-		[Parameter(Mandatory = $true)] [string] $source,
-		[Parameter(Mandatory = $true)] [string] $destination,
-		[Parameter(Mandatory = $true)] [string] $format
+		[Parameter(Mandatory = $true)] [string] $Source,
+		[Parameter(Mandatory = $true)] [string] $Name,
+		[Parameter(Mandatory = $true)] [string] $Date,
+		[Parameter(Mandatory = $true)] [string] $Destination,
+		[Parameter(Mandatory = $true)] [string] $Format
 	)
 
-	Write-Host "`nOrganising $name" -ForegroundColor Green
-	Write-Host "$meta`: $date"
+	$FileDate = ParseDate -DateString $Date -Format $Format
 
-	$fileDate = ParseDate -dateString $date -format $format
-	$fileYear = $fileDate.Year
-	$fileMonth = $fileDate.Month
-
-
-	CreateYearFolder -path $destination -year $fileYear
-	CreateMonthSubFolder -path "$destination\$fileYear" -month $fileMonth
-
-
-	$filePath = "$source\$name"
-	$fileDestination = "$destination\$fileYear\$($months[$fileMonth])"
-
-
-	Write-Host "Source: $filePath -> Destination: $fileDestination"
-	if (Get-ChildItem -Path $fileDestination $name) {
-		Write-Host "File already exists in destination" -ForegroundColor Yellow
+	if (-not (IsValidYear -Year $FileDate.Year)) {
+		return;
 	}
-	else {
-		if ($move) {
-			Move-Item $filePath -Destination $fileDestination
+	if (-not (IsValidMonth -Month $FileDate.Month)) {
+		return;
+	}
+
+	$FileDestination = "$Destination\$($FileDate.Year)\$($Months[$FileDate.Month])"
+
+	if ($CreateTypeFolders) {
+		$FileType = RecogniseType -FileName $Name
+
+		if ($FileType -eq "image") {
+			$FileDestination = "$FileDestination\Images"
+		}
+		elseif ($FileType -eq "raw") {
+			$FileDestination = "$FileDestination\Raws"
+		}
+		elseif ($FileType -eq "video") {
+			$FileDestination = "$FileDestination\Videos"
 		}
 		else {
-			Copy-Item $filePath -Destination $fileDestination
+			Write-Host "File type not recognised" -ForegroundColor Red
+			return;
+		}
+	}
+
+	if ((Test-Path $FileDestination) -eq $false) {
+		Write-Host "Creating folder $FileDestination" -ForegroundColor Yellow
+		[void](New-Item -ItemType Directory -Force -Path $FileDestination)
+	}
+
+	Write-Host "$($Move ? "Moving" : "Copying") to destination: `"$FileDestination`""
+
+	if (Test-Path -Path "$FileDestination\$Name") {
+		Write-Host "File already exists in destination" -ForegroundColor Cyan
+	}
+	else {
+		if ($Move) {
+			[void](Move-Item $Source -Destination $FileDestination)
+		}
+		else {
+			[void](Copy-Item $Source -Destination $FileDestination)
 		}
 	}
 }
 
 
 
-$files = Get-ChildItem -Path $sourcePath -File
+$Files = Get-ChildItem -Path $SourcePath -Recurse -File
+Write-Host "Found $($Files.Count) files"
 
-foreach ($file in $files) {
+$Files | ForEach-Object {
+	$FileSource = $_.FullName
+	$FileName = $_.Name
+
+	Write-Host "`nSource: `"$FileSource`"" -ForegroundColor Green
+
+	# Skip files in folders with the name "edit" in it
+	if ($FileSource -Match "Edit") {
+		Write-Host "File exists in an edits folder" -ForegroundColor Magenta
+
+		return;
+	}
+
 	# Sort any images or files with a Date taken property
-	$imageDateTaken = GetImageDateTaken `
-		-filePath $file.Directory.FullName `
-		-fileName $file.Name
+	$imageDateTaken = GetImageDateTaken -FilePath $_.Directory.FullName -FileName $FileName
 
 	if ($imageDateTaken) {
 		OrganiseImage `
-			-name $file.Name `
-			-date $imageDateTaken `
-			-meta "Date taken" `
-			-source $sourcePath `
-			-destination $destinationPath `
-			-format "dd/MM/yyyy"
+			-Source $FileSource `
+			-Name $FileName `
+			-Destination $DestinationPath `
+			-Date $imageDateTaken `
+			-Format "dd/MM/yyyy"
 
-		continue;
+		return;
 	}
 
 	# Sort any videos or files with a Media created property
-	$mediaCreatedDate = GetMediaCreatedDate `
-		-filePath $file.Directory.FullName `
-		-fileName $file.Name
+	$mediaCreatedDate = GetMediaCreatedDate -FilePath $_.Directory.FullName -FileName $FileName
 
 	if ($mediaCreatedDate) {
 		OrganiseImage `
-			-name $file.Name `
-			-date $mediaCreatedDate `
-			-meta "Media created" `
-			-source $sourcePath `
-			-destination $destinationPath `
-			-format "dd/MM/yyyy"
+			-Source $FileSource `
+			-Name $FileName `
+			-Destination $DestinationPath `
+			-Date $mediaCreatedDate `
+			-Format "dd/MM/yyyy"
 
-		continue;
+		return;
 	}
 
 	# Fall back to sorting by last write time
-	OrganiseImage `
-		-name $file.Name `
-		-date $file.LastWriteTime `
-		-meta "Last write" `
-		-source $sourcePath `
-		-destination $destinationPath `
-		-format "MM/dd/yyyy"
+	if ($AllowFallbackToLastWriteTime) {
+		OrganiseImage `
+			-Source $FileSource `
+			-Name $FileName `
+			-Destination $DestinationPath `
+			-Date $File.LastWriteTime `
+			-Format "MM/dd/yyyy"
+	}
+	else {
+		Write-Host "Not falling back to last write time" -ForegroundColor Cyan
+	}
 }

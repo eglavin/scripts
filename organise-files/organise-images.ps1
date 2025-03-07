@@ -2,6 +2,7 @@ param (
 	[Parameter(Mandatory = $true)] [string] $SourcePath,
 	[Parameter(Mandatory = $true)] [string] $DestinationPath,
 	[switch] $Move,
+	[switch] $DryRun,
 	[switch] $CreateTypeFolders,
 	[switch] $AllowFallbackToLastWriteTime
 )
@@ -176,23 +177,29 @@ function OrganiseImage {
 		}
 	}
 
+	Write-Host "$($Move ? "Moving" : "Copying") to destination: `"$FileDestination`""
+
+	if (Test-Path -Path "$FileDestination\$Name") {
+		Write-Host "File already exists in destination" -ForegroundColor Cyan
+		return;
+	}
+
+
+	if ($DryRun) {
+		Write-Host "Dry run, file not $($Move ? "moved" : "copied")" -ForegroundColor Yellow
+		return;
+	}
+
 	if ((Test-Path $FileDestination) -eq $false) {
 		Write-Host "Creating folder $FileDestination" -ForegroundColor Yellow
 		[void](New-Item -ItemType Directory -Force -Path $FileDestination)
 	}
 
-	Write-Host "$($Move ? "Moving" : "Copying") to destination: `"$FileDestination`""
-
-	if (Test-Path -Path "$FileDestination\$Name") {
-		Write-Host "File already exists in destination" -ForegroundColor Cyan
+	if ($Move) {
+		[void](Move-Item $Source -Destination $FileDestination)
 	}
 	else {
-		if ($Move) {
-			[void](Move-Item $Source -Destination $FileDestination)
-		}
-		else {
-			[void](Copy-Item $Source -Destination $FileDestination)
-		}
+		[void](Copy-Item $Source -Destination $FileDestination)
 	}
 }
 

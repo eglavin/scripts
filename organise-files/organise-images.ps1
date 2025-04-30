@@ -205,7 +205,7 @@ function OrganiseImage {
 
 
 
-$Files = Get-ChildItem -Path $SourcePath -Recurse -File
+$Files = Get-ChildItem -Path $SourcePath -Recurse -File | Sort-Object LastWriteTime -Descending
 Write-Host "Found $($Files.Count) files"
 
 $Files | ForEach-Object {

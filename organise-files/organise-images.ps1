@@ -7,6 +7,7 @@ param (
 	[switch] $AllowFallbackToLastWriteTime
 )
 
+$StopWatch = [Diagnostics.Stopwatch]::StartNew()
 
 $Months = @{
 	1  = "01 - January";
@@ -23,6 +24,15 @@ $Months = @{
 	12 = "12 - December"
 }
 
+$FileCount = @{
+	"Images" = 0;
+	"Raws"   = 0;
+	"Videos" = 0;
+	"Unknown" = 0;
+	"Total"  = 0;
+	"Copied" = 0;
+	"Moved"  = 0
+}
 
 
 function IsValidYear {
@@ -119,19 +129,24 @@ function RecogniseType {
 		[Parameter(Mandatory = $true)] [string] $FileName
 	)
 
+	$FileCount["Total"]++
 	$Extension = ($FileName -split "\.").ToLower() | Select-Object -Last 1
 
 	switch -Regex ($Extension) {
 		"^jpg|jpeg|png|gif|bmp$" {
+			$FileCount["Images"]++
 			return "image"
 		}
 		"^rw2|cr2$" {
+			$FileCount["Raws"]++
 			return "raw"
 		}
 		"^mp4|mov|avi|wmv|flv$" {
+			$FileCount["Videos"]++
 			return "video"
 		}
 		default {
+			$FileCount["Unknown"]++
 			return "unknown"
 		}
 	}
@@ -158,10 +173,9 @@ function OrganiseImage {
 	}
 
 	$FileDestination = "$Destination\$($FileDate.Year)\$($Months[$FileDate.Month])"
+	$FileType = RecogniseType -FileName $Name
 
 	if ($CreateTypeFolders) {
-		$FileType = RecogniseType -FileName $Name
-
 		if ($FileType -eq "image") {
 			$FileDestination = "$FileDestination\Images"
 		}
@@ -196,9 +210,11 @@ function OrganiseImage {
 	}
 
 	if ($Move) {
+		$FileCount["Moved"]++
 		[void](Move-Item $Source -Destination $FileDestination)
 	}
 	else {
+		$FileCount["Copied"]++
 		[void](Copy-Item $Source -Destination $FileDestination)
 	}
 }
@@ -262,3 +278,20 @@ $Files | ForEach-Object {
 		Write-Host "Not falling back to last write time" -ForegroundColor Cyan
 	}
 }
+
+Write-Host ""
+Write-Host "Total files in source path: $($FileCount["Total"])" -ForegroundColor Yellow
+Write-Host "Images: $($FileCount["Images"])"
+Write-Host "Raws: $($FileCount["Raws"])"
+Write-Host "Videos: $($FileCount["Videos"])"
+Write-Host "Unknown: $($FileCount["Unknown"])"
+
+if ($Move) {
+	Write-Host "Moved: $($FileCount["Moved"])" -ForegroundColor Green
+}
+else {
+	Write-Host "Copied: $($FileCount["Copied"])" -ForegroundColor Green
+}
+
+$StopWatch.Stop()
+Write-Host "Time taken: $([math]::Round($StopWatch.Elapsed.TotalSeconds, 3)) seconds"
